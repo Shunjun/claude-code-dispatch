@@ -112,6 +112,7 @@ nohup bash scripts/dispatch.sh \
 | `--prompt-file` | | Read prompt from file (required*) |
 | `--name` | `-n` | Task name for tracking |
 | `--group` | `-g` | Telegram group ID for notifications |
+| `--chat-id` | | Current chat/channel ID for direct notification (优先级高于 --group) |
 | `--workdir` | `-w` | Working directory |
 | `--agent-teams` | | Enable Agent Teams mode |
 | `--agents-json` | | Custom subagent definitions (JSON) |

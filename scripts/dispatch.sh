@@ -43,6 +43,7 @@ PROMPT_FILE=""
 TASK_NAME="adhoc-$(date +%s)"
 SESSION_ID="${SESSION_ID:-$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)}"  # 有效的 UUID
 TELEGRAM_GROUP=""  # Default: Claude Code Tasks group
+CHAT_ID=""                  # Current chat/channel ID for notifications
 CALLBACK_GROUP=""              # Agent's own group for callback
 CALLBACK_DM=""                 # Telegram user ID for DM callback
 CALLBACK_ACCOUNT=""            # Telegram bot account for DM callback
@@ -81,6 +82,7 @@ while [[ $# -gt 0 ]]; do
         --prompt-file) PROMPT_FILE="$2"; shift 2;;
         -n|--name) TASK_NAME="$2"; shift 2;;
         -g|--group) TELEGRAM_GROUP="$2"; shift 2;;
+        --chat-id) CHAT_ID="$2"; shift 2;;
         -s|--session) CALLBACK_SESSION="$2"; shift 2;;
         --callback-group) CALLBACK_GROUP="$2"; shift 2;;
         --callback-dm) CALLBACK_DM="$2"; shift 2;;
@@ -182,12 +184,14 @@ jq -n \
     --arg max_budget "${MAX_BUDGET_USD:-}" \
     --arg max_turns "${MAX_TURNS:-}" \
     --arg worktree "${WORKTREE:-}" \
-    '{task_name: $name, session_id: $session_id, telegram_group: $group, callback_group: $callback_group, callback_dm: $callback_dm, callback_account: $callback_account, callback_session: $session, prompt: $prompt, workdir: $workdir, started_at: $ts, agent_teams: ($agent_teams == "1"), agent_id: $agent_id, model: $model, fallback_model: $fallback_model, max_budget_usd: $max_budget, max_turns: $max_turns, worktree: $worktree, status: "running"}' \
+    --arg chat_id "${CHAT_ID:-}" \
+    '{task_name: $name, session_id: $session_id, telegram_group: $group, chat_id: $chat_id, callback_group: $callback_group, callback_dm: $callback_dm, callback_account: $callback_account, callback_session: $session, prompt: $prompt, workdir: $workdir, started_at: $ts, agent_teams: ($agent_teams == "1"), agent_id: $agent_id, model: $model, fallback_model: $fallback_model, max_budget_usd: $max_budget, max_turns: $max_turns, worktree: $worktree, status: "running"}' \
     > "$META_FILE"
 
 echo "📋 Task metadata written: $META_FILE"
 echo "   Task: $TASK_NAME"
 echo "   Group: ${TELEGRAM_GROUP:-none}"
+echo "   Chat ID: ${CHAT_ID:-none}"
 echo "   Agent Teams: ${AGENT_TEAMS:-no}"
 [ -n "$MAX_BUDGET_USD" ] && echo "   Budget: \$${MAX_BUDGET_USD}"
 [ -n "$MAX_TURNS" ] && echo "   Max Turns: ${MAX_TURNS}"
