@@ -21,7 +21,7 @@ An [OpenClaw](https://github.com/openclaw/openclaw) skill that wraps Claude Code
 
 ```
 dispatch.sh
-  → write task-meta.json
+  → write task-meta-${SESSION_ID}.json
   → launch Claude Code via claude_code_run.py (PTY)
   → [Agent Teams: --agents JSON defines Testing Agent + custom subagents]
   → Claude Code finishes → Stop/TaskCompleted hook fires automatically
@@ -80,7 +80,7 @@ nohup bash scripts/dispatch.sh \
   -n "my-api" \
   -g "-5006066016" \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-api \
+  --workdir $HOME/projects/my-api \
   > /tmp/dispatch-my-api.log 2>&1 &
 
 # With Agent Teams (parallel dev + testing)
@@ -89,7 +89,7 @@ nohup bash scripts/dispatch.sh \
   -n "my-api" \
   --agent-teams \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-api \
+  --workdir $HOME/projects/my-api \
   > /tmp/dispatch-my-api.log 2>&1 &
 
 # With cost controls + fallback
@@ -100,7 +100,7 @@ nohup bash scripts/dispatch.sh \
   --max-turns 50 \
   --fallback-model sonnet \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-auth.log 2>&1 &
 
 # With git worktree isolation
@@ -109,7 +109,7 @@ nohup bash scripts/dispatch.sh \
   -n "feature-x" \
   --worktree feature-x \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-feature.log 2>&1 &
 ```
 
@@ -243,8 +243,8 @@ All results are written to `data/claude-code-results/`:
 | File | Content |
 |------|---------|
 | `latest.json` | Full result (output, task name, group, timestamp) |
-| `task-meta.json` | Task metadata (prompt, workdir, status, cost params) |
-| `task-output.txt` | Raw Claude Code stdout |
+| `task-meta-${SESSION_ID}.json` | Task metadata (prompt, workdir, status, cost params, per session) |
+| `task-output-${SESSION_ID}.txt` | Raw Claude Code stdout (per session) |
 | `pending-wake.json` | Heartbeat fallback notification |
 | `hook.log` | Hook execution log |
 
@@ -258,7 +258,7 @@ tail -f data/claude-code-results/hook.log
 cat data/claude-code-results/latest.json | jq .
 
 # Check task metadata
-cat data/claude-code-results/task-meta.json | jq .
+cat data/claude-code-results/task-meta-${SESSION_ID}.json | jq .
 
 # Test Telegram delivery
 openclaw message send --channel telegram --target "-5006066016" --message "test"
@@ -268,7 +268,7 @@ openclaw message send --channel telegram --target "-5006066016" --message "test"
 
 1. **Must use PTY wrapper** — Direct `claude -p` hangs in exec environments
 2. **Hook fires twice** — Stop + SessionEnd both trigger; `.hook-lock` deduplicates (30s window)
-3. **Hook stdin is empty in PTY** — Output is read from `task-output.txt`, not stdin
+3. **Hook stdin is empty in PTY** — Output is read from `task-output-${SESSION_ID}.txt`, not stdin
 4. **tee pipe race** — Hook sleeps 1s to wait for pipe flush before reading output
 5. **Meta freshness** — Hook validates meta age (<2h) and session ID to avoid stale notifications
 6. **Agent Teams cost** — Multi-agent tasks use significantly more tokens; always use `--max-budget-usd`

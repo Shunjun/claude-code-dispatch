@@ -34,7 +34,7 @@ Edit `~/.claude/settings.json` and add the hooks configuration:
         "hooks": [
           {
             "type": "command",
-            "command": "/home/ubuntu/.claude/hooks/notify-agi.sh"
+            "command": "~/.claude/hooks/notify-agi.sh"
           }
         ]
       }
@@ -44,7 +44,7 @@ Edit `~/.claude/settings.json` and add the hooks configuration:
         "hooks": [
           {
             "type": "command",
-            "command": "/home/ubuntu/.claude/hooks/notify-agi.sh"
+            "command": "~/.claude/hooks/notify-agi.sh"
           }
         ]
       }
@@ -54,7 +54,7 @@ Edit `~/.claude/settings.json` and add the hooks configuration:
         "hooks": [
           {
             "type": "command",
-            "command": "/home/ubuntu/.claude/hooks/notify-agi.sh"
+            "command": "~/.claude/hooks/notify-agi.sh"
           }
         ]
       }
@@ -174,16 +174,16 @@ The hook script uses a `.hook-lock` file to prevent double notifications:
 3. Check `data/claude-code-results/hook.log` for errors
 
 ### Output is empty
-1. PTY mode: hook reads from `task-output.txt`, not stdin
+1. PTY mode: hook reads from `task-output-${SESSION_ID}.txt`, not stdin
 2. Hook sleeps 1s to wait for `tee` pipe flush
-3. Check `data/claude-code-results/task-output.txt` exists and has content
+3. Check `data/claude-code-results/task-output-<session_id>.txt` exists and has content
 
 ### Telegram notification not sent
 1. Check `openclaw` binary is accessible: `which openclaw`
 2. Verify group ID: `openclaw message send --channel telegram --target "<group_id>" --message "test"`
-3. Check `task-meta.json` has valid `telegram_group`
+3. Check `task-meta-<session_id>.json` has valid `telegram_group`
 
 ### Stale notifications
 1. Meta file age check: >2h old meta is ignored
 2. Session ID mismatch: meta session_id must match current session
-3. Clear stale meta: `rm data/claude-code-results/task-meta.json`
+3. Clear stale meta: `rm data/claude-code-results/task-meta-<session_id>.json`

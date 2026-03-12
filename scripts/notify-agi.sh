@@ -5,10 +5,9 @@
 
 set -uo pipefail
 
-LOG="/home/ubuntu/clawd/data/claude-code-results/hook.log"
-RESULT_DIR="/home/ubuntu/clawd/data/claude-code-results"
-META_FILE="${RESULT_DIR}/task-meta.json"
-OPENCLAW_BIN="/home/ubuntu/.npm-global/bin/openclaw"
+LOG="$HOME/.claude-code-results/hook.log"
+RESULT_DIR="$HOME/.claude-code-results"
+OPENCLAW_BIN="$HOME/.npm-global/bin/openclaw"
 
 mkdir -p "$RESULT_DIR"
 
@@ -17,16 +16,18 @@ log() { echo "[$(date -Iseconds)] $*" >> "$LOG"; }
 log "=== Hook fired ==="
 
 # ---- 读 stdin ----
-INPUT=""
 if [ -t 0 ]; then
     log "stdin is tty, skip"
 elif [ -e /dev/stdin ]; then
-    INPUT=$(timeout 2 cat /dev/stdin 2>/dev/null || true)
+    INPUT=$(cat || true)
 fi
 
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"' 2>/dev/null || echo "unknown")
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || echo "")
 EVENT=$(echo "$INPUT" | jq -r '.hook_event_name // "unknown"' 2>/dev/null || echo "unknown")
+
+# ---- 构造 meta 文件路径 ----
+META_FILE="${RESULT_DIR}/task-meta-${SESSION_ID}.json"
 
 log "session=$SESSION_ID cwd=$CWD event=$EVENT"
 
@@ -51,17 +52,18 @@ OUTPUT=""
 # 等待 tee 管道 flush（hook 可能在 pipe 写完前触发）
 sleep 1
 
-# 来源1: task-output.txt (dispatch 脚本 tee 写入)
-TASK_OUTPUT="${RESULT_DIR}/task-output.txt"
+# 来源1: task-output-${SESSION_ID}.txt (dispatch 脚本 tee 写入)
+TASK_OUTPUT="${RESULT_DIR}/task-output-${SESSION_ID}.txt"
 if [ -f "$TASK_OUTPUT" ] && [ -s "$TASK_OUTPUT" ]; then
     OUTPUT=$(tail -c 4000 "$TASK_OUTPUT")
-    log "Output from task-output.txt (${#OUTPUT} chars)"
+    log "Output from task-output-${SESSION_ID}.txt (${#OUTPUT} chars)"
 fi
 
-# 来源2: /tmp/claude-code-output.txt
-if [ -z "$OUTPUT" ] && [ -f "/tmp/claude-code-output.txt" ] && [ -s "/tmp/claude-code-output.txt" ]; then
-    OUTPUT=$(tail -c 4000 /tmp/claude-code-output.txt)
-    log "Output from /tmp fallback (${#OUTPUT} chars)"
+# 来源2: /tmp/claude-code-output-${SESSION_ID}.txt
+TMP_OUTPUT="/tmp/claude-code-output-${SESSION_ID}.txt"
+if [ -z "$OUTPUT" ] && [ -f "$TMP_OUTPUT" ] && [ -s "$TMP_OUTPUT" ]; then
+    OUTPUT=$(tail -c 4000 "$TMP_OUTPUT")
+    log "Output from ${TMP_OUTPUT} (${#OUTPUT} chars)"
 fi
 
 # 来源3: 工作目录
@@ -71,34 +73,41 @@ if [ -z "$OUTPUT" ] && [ -n "$CWD" ] && [ -d "$CWD" ]; then
     log "Output from dir listing"
 fi
 
-# ---- 读取任务元数据（仅当 meta 文件足够新时才信任）----
+# ---- 读取任务元数据 ----
 TASK_NAME="unknown"
 TELEGRAM_GROUP=""
 
 if [ -f "$META_FILE" ]; then
-    # 检查 meta 文件是否在最近 2 小时内写入（防止复用旧任务的 meta）
-    META_AGE=$(( $(date +%s) - $(stat -c %Y "$META_FILE" 2>/dev/null || echo 0) ))
-    if [ "$META_AGE" -gt 7200 ]; then
-        log "Meta file is ${META_AGE}s old (>2h), ignoring stale meta"
-    else
-        # 检查 meta 中的 session_id 是否匹配当前 session（如果有的话）
-        META_SESSION=$(jq -r '.session_id // ""' "$META_FILE" 2>/dev/null || echo "")
-        if [ -n "$META_SESSION" ] && [ "$META_SESSION" != "$SESSION_ID" ] && [ "$SESSION_ID" != "unknown" ]; then
-            log "Meta session=$META_SESSION != current=$SESSION_ID, ignoring"
-        else
-            TASK_NAME=$(jq -r '.task_name // "unknown"' "$META_FILE" 2>/dev/null || echo "unknown")
-            TELEGRAM_GROUP=$(jq -r '.telegram_group // ""' "$META_FILE" 2>/dev/null || echo "")
-            CALLBACK_GROUP=$(jq -r '.callback_group // ""' "$META_FILE" 2>/dev/null || echo "")
-            CALLBACK_DM=$(jq -r '.callback_dm // ""' "$META_FILE" 2>/dev/null || echo "")
-            CALLBACK_ACCOUNT=$(jq -r '.callback_account // ""' "$META_FILE" 2>/dev/null || echo "")
-            log "Meta: task=$TASK_NAME group=$TELEGRAM_GROUP callback_group=$CALLBACK_GROUP callback_dm=$CALLBACK_DM callback_account=$CALLBACK_ACCOUNT age=${META_AGE}s"
-        fi
-    fi
+    TASK_NAME=$(jq -r '.task_name // "unknown"' "$META_FILE" 2>/dev/null || echo "unknown")
+    TELEGRAM_GROUP=$(jq -r '.telegram_group // ""' "$META_FILE" 2>/dev/null || echo "")
+    CALLBACK_GROUP=$(jq -r '.callback_group // ""' "$META_FILE" 2>/dev/null || echo "")
+    CALLBACK_DM=$(jq -r '.callback_dm // ""' "$META_FILE" 2>/dev/null || echo "")
+    CALLBACK_ACCOUNT=$(jq -r '.callback_account // ""' "$META_FILE" 2>/dev/null || echo "")
+    log "Meta: task=$TASK_NAME group=$TELEGRAM_GROUP callback_group=$CALLBACK_GROUP callback_dm=$CALLBACK_DM callback_account=$CALLBACK_ACCOUNT"
+fi
+
+# ---- 检查是否是有效的 dispatch 任务 ----
+# 有效条件：task-meta-${SESSION_ID}.json 存在且 session_id 匹配
+if [ ! -f "$META_FILE" ]; then
+    log "No task-meta-${SESSION_ID}.json, skipping (non-dispatch run)"
+    exit 0
+fi
+
+META_SESSION=$(jq -r '.session_id // ""' "$META_FILE" 2>/dev/null || echo "")
+if [ -z "$META_SESSION" ]; then
+    log "No session_id in meta, skipping (non-dispatch run)"
+    exit 0
+fi
+
+# 检查 session_id 是否匹配
+if [ "$META_SESSION" != "$SESSION_ID" ] && [ "$SESSION_ID" != "unknown" ]; then
+    log "Session mismatch: meta=$META_SESSION, current=$SESSION_ID, skipping"
+    exit 0
 fi
 
 # ---- 如果没有有效的 telegram 目标，跳过通知 ----
 if [ -z "$TELEGRAM_GROUP" ]; then
-    log "No valid telegram_group, skipping notification (non-dispatch run)"
+    log "No valid telegram_group, skipping notification"
 fi
 
 # ---- 写入结果 JSON ----
@@ -127,7 +136,7 @@ if [ -n "$TELEGRAM_GROUP" ] && [ -x "$OPENCLAW_BIN" ]; then
     FEATURES_DONE=""
     EXIT_CODE_VAL="0"
 
-    # 从 task-meta.json 提取
+    # 从 task-meta-${SESSION_ID}.json 提取
     if [ -f "$META_FILE" ]; then
         PROJECT_DIR=$(jq -r '.workdir // ""' "$META_FILE" 2>/dev/null || echo "")
         AGENT_TEAMS_ENABLED=$(jq -r '.agent_teams // false' "$META_FILE" 2>/dev/null || echo "false")
@@ -148,7 +157,7 @@ if [ -n "$TELEGRAM_GROUP" ] && [ -x "$OPENCLAW_BIN" ]; then
         fi
     fi
 
-    # 从 task-output.txt 提取结构化信息
+    # 从 task-output-${SESSION_ID}.txt 提取结构化信息
     if [ -f "$TASK_OUTPUT" ] && [ -s "$TASK_OUTPUT" ]; then
         # 提取 Agent 信息（查找包含 agent 的表格行或列表）
         AGENTS_INFO=$(grep -iE '(agent|developer|testing).*\|.*✅' "$TASK_OUTPUT" 2>/dev/null | head -6 || true)
@@ -277,27 +286,24 @@ WAKE_FILE="${RESULT_DIR}/pending-wake.json"
 jq -n \
     --arg task "$TASK_NAME" \
     --arg group "$TELEGRAM_GROUP" \
+    --arg session_id "$SESSION_ID" \
     --arg ts "$(date -Iseconds)" \
     --arg summary "$(echo "$OUTPUT" | head -c 500 | tr '\n' ' ')" \
-    '{task_name: $task, telegram_group: $group, timestamp: $ts, summary: $summary, processed: false}' \
+    '{task_name: $task, session_id: $session_id, telegram_group: $group, timestamp: $ts, summary: $summary, processed: false}' \
     > "$WAKE_FILE" 2>/dev/null
 
 log "Wrote pending-wake.json"
-
-# ---- 方式3: 唤醒 AGI 主会话（通过 /hooks/wake REST API）----
-# 旧方案 `openclaw agent --session-id` 有两个 bug:
-#   1) session UUID 在 /new 或 /reset 后会变，解析不可靠
-#   2) openclaw agent 命令本身会挂起/超时
-# 新方案: POST /hooks/wake — 注入系统事件到主会话，可靠且无阻塞
 
 GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 HOOK_TOKEN=""
 
 # 从 config 文件读取 webhook token
-OPENCLAW_CONFIG="/home/ubuntu/.openclaw/openclaw.json"
+OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 if [ -f "$OPENCLAW_CONFIG" ]; then
     HOOK_TOKEN=$(jq -r '.hooks.token // ""' "$OPENCLAW_CONFIG" 2>/dev/null || echo "")
 fi
+
+log "HOOK_TOKEN=$HOOK_TOKEN"
 
 WAKE_TEXT="[CLAUDE_CODE_DONE] task=${TASK_NAME} status=done group=${TELEGRAM_GROUP:-none} ts=$(date -Iseconds)"
 

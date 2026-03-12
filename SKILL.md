@@ -24,7 +24,7 @@ completion. Zero polling, zero token waste.
 
 ```
 dispatch.sh
-  → write task-meta.json
+  → write task-meta-${SESSION_ID}.json
   → launch Claude Code via claude_code_run.py (PTY wrapper)
   → [Agent Teams: --agents JSON defines Testing Agent + custom subagents]
   → Claude Code finishes → Stop/TaskCompleted hook fires automatically
@@ -38,7 +38,7 @@ dispatch.sh
 
 ### Basic dispatch
 
-⚠️ **Always use `nohup` + background (`&`)** — dispatch runs until done.
+⚠️ **Always use `nohup` + background (`&`)** — dispatch runs until done. Don't wait for results; you'll be notified automatically via heartbeat when the task completes.
 
 ```bash
 nohup bash scripts/dispatch.sh \
@@ -46,7 +46,7 @@ nohup bash scripts/dispatch.sh \
   -n "my-api" \
   -g "-5006066016" \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-api \
+  --workdir $HOME/projects/my-api \
   > /tmp/dispatch-my-api.log 2>&1 &
 ```
 
@@ -58,7 +58,7 @@ nohup bash scripts/dispatch.sh \
   -n "fullstack-app" \
   --agent-teams \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/fullstack-app \
+  --workdir $HOME/projects/fullstack-app \
   > /tmp/dispatch-fullstack.log 2>&1 &
 ```
 
@@ -75,7 +75,7 @@ nohup bash scripts/dispatch.sh \
   --max-turns 50 \
   --fallback-model sonnet \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-refactor.log 2>&1 &
 ```
 
@@ -88,7 +88,7 @@ nohup bash scripts/dispatch.sh \
   --agent-teams \
   --agents-json '{"security-reviewer":{"description":"Security expert","prompt":"Review for vulnerabilities","tools":["Read","Grep","Glob"],"model":"opus"}}' \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/cli-tool \
+  --workdir $HOME/projects/cli-tool \
   > /tmp/dispatch-cli.log 2>&1 &
 ```
 
@@ -100,7 +100,7 @@ nohup bash scripts/dispatch.sh \
   -n "feature-x" \
   --worktree feature-x \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-feature.log 2>&1 &
 ```
 
@@ -158,10 +158,10 @@ tail -f data/claude-code-results/hook.log
 cat data/claude-code-results/latest.json | jq .
 
 # Check task metadata
-cat data/claude-code-results/task-meta.json | jq .
+cat data/claude-code-results/task-meta-${SESSION_ID}.json | jq .
 
 # Test Telegram delivery
-openclaw message send --channel telegram --target "-5006066016" --message "test"
+openclaw message send --channel telegram --target "-12345678" --message "test"
 
 # Check dispatch log
 tail -f /tmp/dispatch-*.log
@@ -171,7 +171,7 @@ tail -f /tmp/dispatch-*.log
 
 1. **Must use PTY wrapper** — Direct `claude -p` can hang in exec environments
 2. **Hook fires twice** — Stop + SessionEnd both trigger; `.hook-lock` deduplicates (30s window)
-3. **Hook stdin is empty in PTY** — Output read from `task-output.txt`, not stdin
+3. **Hook stdin is empty in PTY** — Output read from `task-output-${SESSION_ID}.txt`, not stdin
 4. **tee pipe race** — Hook sleeps 1s for pipe flush before reading output
 5. **Meta freshness** — Hook validates meta age (<2h) and session ID
 6. **Agent Teams cost** — Use `--max-budget-usd` to cap spend on multi-agent tasks

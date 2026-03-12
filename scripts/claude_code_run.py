@@ -29,7 +29,7 @@ import sys
 import time
 from pathlib import Path
 
-DEFAULT_CLAUDE = os.environ.get("CLAUDE_CODE_BIN", "/home/ubuntu/.local/bin/claude")
+DEFAULT_CLAUDE = os.environ.get("CLAUDE_CODE_BIN", os.path.expanduser("~/.local/bin/claude"))
 
 
 def which(name: str) -> str | None:
@@ -98,6 +98,9 @@ def build_headless_cmd(args: argparse.Namespace) -> list[str]:
 
     if args.resume:
         cmd += ["--resume", args.resume]
+
+    if args.session_id:
+        cmd += ["--session-id", args.session_id]
 
     # Agent Teams support
     if args.teammate_mode:
@@ -358,6 +361,7 @@ def main() -> int:
     # Session management
     ap.add_argument("--continue", dest="continue_latest", action="store_true", help="Continue the most recent session")
     ap.add_argument("--resume", help="Resume a specific session ID")
+    ap.add_argument("--session-id", dest="session_id", help="Use a specific session ID for the conversation")
     ap.add_argument("--no-session-persistence", dest="no_session_persistence", action="store_true",
                      help="Don't save session to disk (one-off tasks, print mode only)")
 

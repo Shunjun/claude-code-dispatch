@@ -23,7 +23,7 @@ nohup bash scripts/dispatch.sh \
 - Add a README with setup instructions" \
   -n "user-api" \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/user-api \
+  --workdir $HOME/projects/user-api \
   > /tmp/dispatch-user-api.log 2>&1 &
 ```
 
@@ -38,7 +38,7 @@ nohup bash scripts/dispatch.sh \
 - Run the full test suite after" \
   -n "fix-auth-timeout" \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-fix.log 2>&1 &
 ```
 
@@ -52,7 +52,7 @@ nohup bash scripts/dispatch.sh \
 - Include severity (critical/high/medium/low) and fix suggestions" \
   -n "security-review" \
   --permission-mode plan \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-review.log 2>&1 &
 ```
 
@@ -66,7 +66,7 @@ nohup bash scripts/dispatch.sh \
   --max-budget-usd 5.00 \
   --max-turns 50 \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-refactor.log 2>&1 &
 ```
 
@@ -78,7 +78,7 @@ nohup bash scripts/dispatch.sh \
   --model opus \
   --fallback-model sonnet \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-errors.log 2>&1 &
 ```
 
@@ -90,7 +90,7 @@ nohup bash scripts/dispatch.sh \
   --agent-teams \
   --teammate-mode in-process \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/todo-app \
+  --workdir $HOME/projects/todo-app \
   > /tmp/dispatch-todo.log 2>&1 &
 ```
 
@@ -115,7 +115,7 @@ nohup bash scripts/dispatch.sh \
   }' \
   --agent-teams \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/encrypt-cli \
+  --workdir $HOME/projects/encrypt-cli \
   > /tmp/dispatch-encrypt.log 2>&1 &
 ```
 
@@ -126,7 +126,7 @@ nohup bash scripts/dispatch.sh \
   -n "dashboard-feature" \
   --worktree dashboard-feature \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-dashboard.log 2>&1 &
 ```
 
@@ -137,7 +137,7 @@ nohup bash scripts/dispatch.sh \
   -n "jira-sprint42" \
   --mcp-config ./mcp-servers.json \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-jira.log 2>&1 &
 ```
 
@@ -148,7 +148,7 @@ nohup bash scripts/dispatch.sh \
   -n "style-refactor" \
   --append-system-prompt "Always use TypeScript strict mode. Prefer functional patterns. Use Bun instead of npm." \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-style.log 2>&1 &
 ```
 
@@ -169,7 +169,7 @@ nohup bash scripts/dispatch.sh \
   -n "validation" \
   --append-system-prompt-file /tmp/team-conventions.txt \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-validation.log 2>&1 &
 ```
 

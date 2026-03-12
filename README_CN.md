@@ -21,7 +21,7 @@
 
 ```
 dispatch.sh
-  → 写入 task-meta.json
+  → 写入 task-meta-${SESSION_ID}.json
   → 通过 claude_code_run.py (PTY) 启动 Claude Code
   → [Agent Teams: --agents JSON 定义 Testing Agent + 自定义子 Agent]
   → Claude Code 完成 → Stop/TaskCompleted Hook 自动触发
@@ -80,7 +80,7 @@ nohup bash scripts/dispatch.sh \
   -n "my-api" \
   -g "-5006066016" \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-api \
+  --workdir $HOME/projects/my-api \
   > /tmp/dispatch-my-api.log 2>&1 &
 
 # 使用 Agent Teams（并行开发 + 测试）
@@ -89,7 +89,7 @@ nohup bash scripts/dispatch.sh \
   -n "my-api" \
   --agent-teams \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-api \
+  --workdir $HOME/projects/my-api \
   > /tmp/dispatch-my-api.log 2>&1 &
 
 # 带成本控制 + 模型降级
@@ -100,7 +100,7 @@ nohup bash scripts/dispatch.sh \
   --max-turns 50 \
   --fallback-model sonnet \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-auth.log 2>&1 &
 
 # 使用 git worktree 隔离
@@ -109,7 +109,7 @@ nohup bash scripts/dispatch.sh \
   -n "feature-x" \
   --worktree feature-x \
   --permission-mode bypassPermissions \
-  --workdir /home/ubuntu/projects/my-app \
+  --workdir $HOME/projects/my-app \
   > /tmp/dispatch-feature.log 2>&1 &
 ```
 
@@ -245,8 +245,8 @@ nohup bash scripts/dispatch.sh \
 | 文件 | 内容 |
 |------|------|
 | `latest.json` | 完整结果（输出、任务名、群组、时间戳） |
-| `task-meta.json` | 任务元数据（prompt、工作目录、状态、成本参数） |
-| `task-output.txt` | Claude Code 原始输出 |
+| `task-meta-${SESSION_ID}.json` | 任务元数据（prompt、工作目录、状态、成本参数，按会话隔离） |
+| `task-output-${SESSION_ID}.txt` | Claude Code 原始输出（按会话隔离） |
 | `pending-wake.json` | 心跳兜底通知 |
 | `hook.log` | Hook 执行日志 |
 
@@ -260,7 +260,7 @@ tail -f data/claude-code-results/hook.log
 cat data/claude-code-results/latest.json | jq .
 
 # 检查任务元数据
-cat data/claude-code-results/task-meta.json | jq .
+cat data/claude-code-results/task-meta-${SESSION_ID}.json | jq .
 
 # 测试 Telegram 发送
 openclaw message send --channel telegram --target "-5006066016" --message "test"
@@ -270,7 +270,7 @@ openclaw message send --channel telegram --target "-5006066016" --message "test"
 
 1. **必须使用 PTY 包装器** — 直接 `claude -p` 在 exec 环境中会挂起
 2. **Hook 会触发两次** — Stop + SessionEnd 都会触发；`.hook-lock` 做了 30 秒去重
-3. **PTY 模式下 Hook 的 stdin 为空** — 输出从 `task-output.txt` 读取，而非 stdin
+3. **PTY 模式下 Hook 的 stdin 为空** — 输出从 `task-output-${SESSION_ID}.txt` 读取，而非 stdin
 4. **tee 管道竞态** — Hook 等待 1 秒让 pipe flush 完成后再读取输出
 5. **Meta 新鲜度检查** — Hook 验证 meta 文件时间（<2h）和 session ID，避免误发旧任务通知
 6. **Agent Teams 成本** — 多 Agent 任务 token 消耗大幅增加；务必使用 `--max-budget-usd`

@@ -29,7 +29,7 @@
 #   --verbose                   Enable verbose logging
 #
 # The script:
-#   1. Writes task metadata to task-meta.json (hook reads this)
+#   1. Writes task metadata to task-meta-${SESSION_ID}.json (hook reads this)
 #   2. Runs Claude Code via claude_code_run.py
 #   3. When Claude Code finishes, Stop/TaskCompleted hook fires automatically
 #   4. Hook reads meta, writes results, wakes AGI
@@ -37,23 +37,17 @@
 
 set -euo pipefail
 
-RESULT_DIR="/home/ubuntu/clawd/data/claude-code-results"
-META_FILE="${RESULT_DIR}/task-meta.json"
-OUTPUT_FILE="/tmp/claude-code-output.txt"
-TASK_OUTPUT="${RESULT_DIR}/task-output.txt"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-RUNNER="${SCRIPT_DIR}/claude_code_run.py"
-
 # Defaults
 PROMPT=""
 PROMPT_FILE=""
 TASK_NAME="adhoc-$(date +%s)"
-TELEGRAM_GROUP="-5006066016"  # Default: Claude Code Tasks group
+SESSION_ID="${SESSION_ID:-$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)}"  # 有效的 UUID
+TELEGRAM_GROUP=""  # Default: Claude Code Tasks group
 CALLBACK_GROUP=""              # Agent's own group for callback
 CALLBACK_DM=""                 # Telegram user ID for DM callback
 CALLBACK_ACCOUNT=""            # Telegram bot account for DM callback
 CALLBACK_SESSION="${OPENCLAW_SESSION_KEY:-}"
-WORKDIR="/home/ubuntu/clawd"
+WORKDIR="$HOME"
 AGENT_TEAMS=""
 AGENT_ID=""
 AGENTS_JSON=""
@@ -71,6 +65,14 @@ APPEND_SYSTEM_PROMPT=""
 APPEND_SYSTEM_PROMPT_FILE=""
 MCP_CONFIG=""
 VERBOSE=""
+
+# ---- 构造结果文件路径 ----
+RESULT_DIR="$HOME/.claude-code-results"
+META_FILE="${RESULT_DIR}/task-meta-${SESSION_ID}.json"
+OUTPUT_FILE="/tmp/claude-code-output-${SESSION_ID}.txt"
+TASK_OUTPUT="${RESULT_DIR}/task-output-${SESSION_ID}.txt"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RUNNER="${SCRIPT_DIR}/claude_code_run.py"
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -165,6 +167,7 @@ mkdir -p "$RESULT_DIR"
 jq -n \
     --arg name "$TASK_NAME" \
     --arg group "$TELEGRAM_GROUP" \
+    --arg session_id "$SESSION_ID" \
     --arg callback_group "$CALLBACK_GROUP" \
     --arg callback_dm "$CALLBACK_DM" \
     --arg callback_account "$CALLBACK_ACCOUNT" \
@@ -179,7 +182,7 @@ jq -n \
     --arg max_budget "${MAX_BUDGET_USD:-}" \
     --arg max_turns "${MAX_TURNS:-}" \
     --arg worktree "${WORKTREE:-}" \
-    '{task_name: $name, telegram_group: $group, callback_group: $callback_group, callback_dm: $callback_dm, callback_account: $callback_account, callback_session: $session, prompt: $prompt, workdir: $workdir, started_at: $ts, agent_teams: ($agent_teams == "1"), agent_id: $agent_id, model: $model, fallback_model: $fallback_model, max_budget_usd: $max_budget, max_turns: $max_turns, worktree: $worktree, status: "running"}' \
+    '{task_name: $name, session_id: $session_id, telegram_group: $group, callback_group: $callback_group, callback_dm: $callback_dm, callback_account: $callback_account, callback_session: $session, prompt: $prompt, workdir: $workdir, started_at: $ts, agent_teams: ($agent_teams == "1"), agent_id: $agent_id, model: $model, fallback_model: $fallback_model, max_budget_usd: $max_budget, max_turns: $max_turns, worktree: $worktree, status: "running"}' \
     > "$META_FILE"
 
 echo "📋 Task metadata written: $META_FILE"
@@ -202,7 +205,7 @@ PROMPT_TMPFILE="$(mktemp /tmp/dispatch-prompt-XXXXXX.txt)"
 printf '%s' "$PROMPT" > "$PROMPT_TMPFILE"
 trap 'rm -f "$PROMPT_TMPFILE"' EXIT
 
-CMD=(python3 "$RUNNER" --prompt-file "$PROMPT_TMPFILE" --cwd "$WORKDIR")
+CMD=(python3 "$RUNNER" --prompt-file "$PROMPT_TMPFILE" --cwd "$WORKDIR" --session-id "$SESSION_ID")
 
 if [ -n "$AGENT_TEAMS" ]; then
     CMD+=(--agent-teams)
